@@ -9,7 +9,6 @@ from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
 from models import db, User
-#from models import Person
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -30,11 +29,41 @@ def handle_invalid_usage(error):
 def sitemap():
     return generate_sitemap(app)
 
-@app.route('/user', methods=['GET'])
-def handle_hello():
+@app.route('/user', methods=['POST'])
+def create_user():
+    body = request.get_json()
+
+    if body is None:
+        return "The request body is null", 400
+    if 'name' not in body:
+        return "Especificar name", 400
+    if 'email' not in body:
+        return "Especificar email", 400
+    if 'password' not in body:
+        return "Especificar password", 400
+
+    user = User()
+    user.name = body['name']
+    user.email = body['email']
+    user.password = body['password']
+
+    db.session.add(user)
+    db.session.commit()
 
     response_body = {
-        "msg": "Hello, this is your GET /user response "
+        "msg": "Added user"
+    }
+
+    return jsonify(response_body), 200
+
+@app.route('/user', methods=['GET'])
+def get_user():
+
+    all_user = User.query.all()
+    all_user = list(map(lambda x: x.serialize(), all_user))
+
+    response_body = {
+        "msg": "PURA VIDA!"
     }
 
     return jsonify(response_body), 200
