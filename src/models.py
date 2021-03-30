@@ -45,7 +45,7 @@ class Favorite(db.Model):
 class Character(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    birth_day = db.Column(db.DateTime, nullable=False)
+    birth_day = db.Column(db.String(100), nullable=False)
     gender = db.Column(db.String(100), nullable=False)
     height = db.Column(db.Integer, nullable=False)
     skin_color = db.Column(db.String(100), nullable=False)
