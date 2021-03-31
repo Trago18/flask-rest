@@ -57,7 +57,13 @@ def create_user():
     db.session.add(user)
     db.session.commit()
 
-    ### Crear tabla de favoritos
+    user = User.query.filter_by(username=user.username).first()
+
+    favorite = Favorite()
+    favorite.user_id = user.id
+
+    db.session.add(favorite)
+    db.session.commit()
 
     response_body = {
         "msg": "Added user"

@@ -11,7 +11,7 @@ class User(db.Model):
     users = db.relationship('Favorite', uselist=False, backref='user', lazy=True)
 
     def __repr__(self):
-        return '<User %r>' % self.username
+        return '<User %s>' % self.username
 
     def serialize(self):
         return {
