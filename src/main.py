@@ -2,6 +2,7 @@
 This module takes care of starting the API Server, Loading the DB and Adding the endpoints
 """
 import os
+import re
 from flask import Flask, request, jsonify, url_for
 from flask_migrate import Migrate
 from flask_swagger import swagger
@@ -36,59 +37,82 @@ def handle_invalid_usage(error):
 def sitemap():
     return generate_sitemap(app)
 
-@app.route('/register', methods=['POST'])
+@app.route('/signup', methods=['POST'])
 def create_user():
-    body = request.get_json()
 
-    if body is None:
-        return "The request body is null", 400
-    if 'username' not in body:
-        return "Empty username", 400
-    if 'email' not in body:
-        return "Empty email", 400
-    if 'password' not in body:
-        return "Empty password", 400
+    request_body = request.get_json()
+    error_messages=[]
+
+    if 'username' not in request_body:
+        error_messages.append({"msg":"Username required"})
+    if 'email' not in request_body:
+        error_messages.append({"msg":"Email required"})
+    if 'password' not in request_body:
+        error_messages.append({"msg":"Password required"})
+    if len(error_messages) > 0:
+        return jsonify(error_messages), 400       
+
+    if not re.match('^(\w|\.|\_|\-)+[@](\w|\_|\-|\.)+[.]\w{2,8}$', request_body['email']):
+        error_messages.append({'msg':'Enter a valid email format'})
+    if not re.match('^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W])[^\n\t]{8,20}$', request_body['password']):
+        error_messages.append({'msg':'Password must contain the following: a lowercase letter, a capital letter, a number, one special character and minimum 8 characters'})
+    if len(error_messages) > 0:
+        return jsonify(error_messages), 400
+
+    username = User.query.filter_by(username=request_body['username']).first()
+    email = User.query.filter_by(email=request_body['email']).first()
+
+    if username:
+        error_messages.append({'msg': 'This username already exists. Check your username'})
+    if email:
+        error_messages.append({'msg': 'This email already exists. Check your email'})
+    if len(error_messages) > 0:
+        return jsonify(error_messages), 400
 
     user = User()
-    user.username = body['username']
-    user.email = body['email']
-    user.password = body['password']
+    user.username = request_body['username']
+    user.email = request_body['email']
+    user.password = request_body['password']
+    user.is_active=True
 
     db.session.add(user)
     db.session.commit()
 
-    user = User.query.filter_by(username=user.username).first()
+    # user = User.query.filter_by(username=user.username).first()
 
-    favorite = Favorite()
-    favorite.user_id = user.id
+    # favorite = Favorite()
+    # favorite.user_id = user.id
 
-    db.session.add(favorite)
-    db.session.commit()
+    # db.session.add(favorite)
+    # db.session.commit()
 
     response_body = {
-        "msg": "Added user"
+        "msg": "The user was successfully created."
     }
 
     return jsonify(response_body), 200
+
 
 @app.route("/login", methods=["POST"])
 def login():
     username = request.json.get("username", None)
     password = request.json.get("password", None)
-
-    if username is None and password is None:
-        return jsonify({"msg": "Empty username and password"}), 400
+    error_messages=[]
+    
     if username is None:
-        return jsonify({"msg": "Empty username"}), 400
+        error_messages.append({"msg": "Username is required"})
     if password is None:
-        return jsonify({"msg": "Empty password"}), 400
+        error_messages.append({"msg": "Password is required"})
+    if len(error_messages) > 0:
+        return jsonify(error_messages), 400
 
-    user = User.query.filter_by(username=username, password=password).first()
+    user = User.query.filter_by(username=username).first()
     if user is None:
         return jsonify({"msg": "Bad username or password"}), 401
     
-    access_token = create_access_token(identity=user.id)
-    return jsonify(access_token=access_token)
+    expiration = datetime.timedelta(days=1)
+    access_token = create_access_token(identity=user.id, expires_delta=expiration)
+    return jsonify('The login has been successful.', {'token':access_token, 'user_id':user.id}), 200
 
 
 # Protect a route with jwt_required, which will kick out requests
