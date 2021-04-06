@@ -36,7 +36,7 @@ def handle_invalid_usage(error):
 def sitemap():
     return generate_sitemap(app)
 
-@app.route('/new-account', methods=['POST'])
+@app.route('/register', methods=['POST'])
 def create_user():
     body = request.get_json()
 
