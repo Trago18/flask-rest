@@ -3,6 +3,7 @@ This module takes care of starting the API Server, Loading the DB and Adding the
 """
 import os
 import re
+import datetime
 from flask import Flask, request, jsonify, url_for
 from flask_migrate import Migrate
 from flask_swagger import swagger
@@ -10,11 +11,7 @@ from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
 from models import db, User, Favorite, Character, Planet
-
-from flask_jwt_extended import create_access_token
-from flask_jwt_extended import get_jwt_identity
-from flask_jwt_extended import jwt_required
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -106,13 +103,18 @@ def login():
     if len(error_messages) > 0:
         return jsonify(error_messages), 400
 
-    user = User.query.filter_by(username=username).first()
-    if user is None:
-        return jsonify({"msg": "Bad username or password"}), 401
+    username = User.query.filter_by(username=username).first()
+    password = User.query.filter_by(password=password).first()
+    if not username:
+        error_messages.append({"msg": "Invalid username"})
+    if not password:
+        error_messages.append({"msg": "Invalid password"})
+    if len(error_messages) > 0:
+        return jsonify(error_messages), 401
     
     expiration = datetime.timedelta(days=1)
-    access_token = create_access_token(identity=user.id, expires_delta=expiration)
-    return jsonify('The login has been successful.', {'token':access_token, 'user_id':user.id}), 200
+    access_token = create_access_token(identity=username.id, expires_delta=expiration)
+    return jsonify('The login has been successful.', {'token':access_token, 'user_id':username.id}), 200
 
 
 # Protect a route with jwt_required, which will kick out requests
