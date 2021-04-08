@@ -3,6 +3,7 @@ This module takes care of starting the API Server, Loading the DB and Adding the
 """
 import os
 import re
+import requests
 import datetime
 from flask import Flask, request, jsonify, url_for
 from flask_migrate import Migrate
@@ -23,6 +24,24 @@ MIGRATE = Migrate(app, db)
 db.init_app(app)
 CORS(app)
 setup_admin(app)
+
+@app.before_first_request
+def characters_load():
+    response_characters = requests.get("https://swapi.dev/api/people/")
+    json_response = response_characters.json()
+    for character in json_response['results']:
+        character_info=Character(name=character['name'], birth_day=character['birth_year'], gender = character['gender'], height = character['height'], skin_color = character['skin_color'], hair_color = character['hair_color'], eye_color = character['eye_color'])
+        db.session.add(character_info)
+    db.session.commit()
+
+@app.before_first_request
+def planets_load():
+    response_planets = requests.get("https://swapi.dev/api/planets")
+    json_response = response_planets.json()
+    for planet in json_response['results']:
+        planet_info=Planet(name=planet['name'], climate=planet['climate'], population = planet['population'], terrain = planet['terrain'], rotation_period = planet['rotation_period'], orbital_period = planet['orbital_period'], diameter = planet['diameter'])
+        db.session.add(planet_info)
+    db.session.commit()
 
 # Handle/serialize errors like a JSON object
 @app.errorhandler(APIException)
@@ -75,13 +94,13 @@ def create_user():
     db.session.add(user)
     db.session.commit()
 
-    # user = User.query.filter_by(username=user.username).first()
+    #user = User.query.filter_by(username=user.username).first()
 
-    # favorite = Favorite()
-    # favorite.user_id = user.id
+    #favorite = Favorite()
+    #favorite.user_id = user.id
 
-    # db.session.add(favorite)
-    # db.session.commit()
+    #db.session.add(favorite)
+    #db.session.commit()
 
     response_body = {
         "msg": "The user was successfully created."
@@ -121,7 +140,7 @@ def login():
 # without a valid JWT present.
 @app.route("/favorite/<username>", methods=["GET"])
 @jwt_required()
-def protected(username):
+def get_favorite(username):
     current_user = get_jwt_identity()
 
     user = User.query.filter_by(username=username).first()
@@ -132,7 +151,17 @@ def protected(username):
     return jsonify(characters=favorite.character, planets=favorite.planet), 200
 
 
-### Agregar PUT de favoritos ###
+@app.route("/favorite/<username>", methods=["POST"])
+@jwt_required()
+def add_favorite(username):
+    current_user = get_jwt_identity()
+
+    user = User.query.filter_by(username=username).first()
+    if user.id != current_user:
+        return jsonify({"msg": "Invalid token"}), 401
+    
+    favorite = request.get_json()
+
 
 
 @app.route("/character/<int:id>", methods=["GET"])
@@ -151,7 +180,6 @@ def get_planet(id):
     planet = list(map(lambda x: x.serialize(), planet))
 
     return jsonify(planet), 200
-
 
 # this only runs if `$ python src/main.py` is executed
 if __name__ == '__main__':
