@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import safe_str_cmp
 
 
 db = SQLAlchemy()
@@ -20,6 +21,9 @@ class User(db.Model):
             "username": self.username,
             "email": self.email,
         }
+
+    def check_password(self, password):
+        return safe_str_cmp(password, self.password)
 
 class Character(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -83,10 +87,22 @@ class Favorite(db.Model):
         return '<Favorite %r>' % self.user_id
 
     def serialize(self):
-        return {
-            "id": self.id,
-            "character": self.character,
-            "planet": self.planet,
-            "characters": self.characters,
-            "planets": self.planets,
-        }
+        character = Character.query.filter_by(id=self.character_id).first()
+        planet = Planet.query.filter_by(id=self.planet_id).first()
+        if character and planet:
+            return {
+                "character_id": self.character_id,
+                "planet_id": self.planet_id,
+                "characters": character.name,
+                "planets": planet.name,
+            }
+        if character:
+            return {
+                "character_id": self.character_id,
+                "characters": character.name,
+            }
+        if planet:
+            return {
+                "planet_id": self.planet_id,
+                "planets": planet.name,
+            }

@@ -4,7 +4,7 @@ This module takes care of starting the API Server, Loading the DB and Adding the
 import os
 import re
 import requests
-import datetime
+from datetime import timedelta
 from flask import Flask, request, jsonify, url_for
 from flask_migrate import Migrate
 from flask_swagger import swagger
@@ -12,7 +12,7 @@ from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from admin import setup_admin
 from models import db, User, Favorite, Character, Planet
-from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager
+from flask_jwt_extended import create_access_token, current_user, get_jwt_identity, jwt_required, JWTManager
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
@@ -25,23 +25,36 @@ db.init_app(app)
 CORS(app)
 setup_admin(app)
 
+@jwt.user_identity_loader
+def user_identity_lookup(user):
+    return user.id
+
+@jwt.user_lookup_loader
+def user_lookup_callback(_jwt_header, jwt_data):
+    identity = jwt_data["sub"]
+    return User.query.filter_by(id=identity).one_or_none()
+
 @app.before_first_request
 def characters_load():
-    response_characters = requests.get("https://swapi.dev/api/people/")
-    json_response = response_characters.json()
-    for character in json_response['results']:
-        character_info=Character(name=character['name'], birth_day=character['birth_year'], gender = character['gender'], height = character['height'], skin_color = character['skin_color'], hair_color = character['hair_color'], eye_color = character['eye_color'])
-        db.session.add(character_info)
-    db.session.commit()
+    characters = Character.query.all()
+    if not characters:
+        response_characters = requests.get("https://swapi.dev/api/people/")
+        json_response = response_characters.json()
+        for character in json_response['results']:
+            character_info=Character(name=character['name'], birth_day=character['birth_year'], gender = character['gender'], height = character['height'], skin_color = character['skin_color'], hair_color = character['hair_color'], eye_color = character['eye_color'])
+            db.session.add(character_info)
+        db.session.commit()
 
 @app.before_first_request
 def planets_load():
-    response_planets = requests.get("https://swapi.dev/api/planets")
-    json_response = response_planets.json()
-    for planet in json_response['results']:
-        planet_info=Planet(name=planet['name'], climate=planet['climate'], population = planet['population'], terrain = planet['terrain'], rotation_period = planet['rotation_period'], orbital_period = planet['orbital_period'], diameter = planet['diameter'])
-        db.session.add(planet_info)
-    db.session.commit()
+    planets = Planet.query.all()
+    if not planets:
+        response_planets = requests.get("https://swapi.dev/api/planets")
+        json_response = response_planets.json()
+        for planet in json_response['results']:
+            planet_info=Planet(name=planet['name'], climate=planet['climate'], population = planet['population'], terrain = planet['terrain'], rotation_period = planet['rotation_period'], orbital_period = planet['orbital_period'], diameter = planet['diameter'])
+            db.session.add(planet_info)
+        db.session.commit()
 
 # Handle/serialize errors like a JSON object
 @app.errorhandler(APIException)
@@ -122,36 +135,30 @@ def login():
     if len(error_messages) > 0:
         return jsonify(error_messages), 400
 
-    username = User.query.filter_by(username=username).first()
-    password = User.query.filter_by(password=password).first()
-    if not username:
-        error_messages.append({"msg": "Invalid username"})
-    if not password:
-        error_messages.append({"msg": "Invalid password"})
-    if len(error_messages) > 0:
-        return jsonify(error_messages), 401
+    user = User.query.filter_by(username=username).one_or_none()
+
+    if not user:
+        return jsonify({"msg": "Username doesn't exist"}), 400
+    if not user.check_password(password):
+        return jsonify({"msg": "Invalid password"}), 401
     
-    expiration = datetime.timedelta(days=1)
-    access_token = create_access_token(identity=username.id, expires_delta=expiration)
-    return jsonify('The login has been successful.', {'token':access_token, 'user_id':username.id}), 200
+    expiration = timedelta(days=1)
+    access_token = create_access_token(identity=user, expires_delta=expiration)
+    return jsonify('The login has been successful.', {'token':access_token}), 200
 
 
 # Protect a route with jwt_required, which will kick out requests
 # without a valid JWT present.
-@app.route("/favorite/<username>", methods=["GET"])
+@app.route("/favorites", methods=["GET"])
 @jwt_required()
-def get_favorite(username):
-    current_user = get_jwt_identity()
+def get_favorites():
 
-    user = User.query.filter_by(username=username).first()
-    if user.id != current_user:
-        return jsonify({"msg": "Invalid token"}), 401
-    favorite = Favorite.query.filter_by(id=user.id).first()
-
-    return jsonify(characters=favorite.character, planets=favorite.planet), 200
+    favorite = Favorite.query.filter_by(user_id=current_user.id).first()
+    favorite_serial = favorite.serialize()
+    return jsonify(favorite_serial)
 
 
-@app.route("/favorite/<username>", methods=["POST"])
+@app.route("/favorites", methods=["POST"])
 @jwt_required()
 def add_favorite(username):
     current_user = get_jwt_identity()
