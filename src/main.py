@@ -153,22 +153,45 @@ def login():
 @jwt_required()
 def get_favorites():
 
-    favorite = Favorite.query.filter_by(user_id=current_user.id).first()
-    favorite_serial = favorite.serialize()
-    return jsonify(favorite_serial)
+    favorite = Favorite.query.filter_by(user_id=current_user.id)
+    all_favorites = list(map(lambda favorite: favorite.serialize(), favorite))
+    return jsonify(all_favorites), 200
 
 
 @app.route("/favorites", methods=["POST"])
 @jwt_required()
-def add_favorite(username):
-    current_user = get_jwt_identity()
+def add_favorite():
 
-    user = User.query.filter_by(username=username).first()
-    if user.id != current_user:
-        return jsonify({"msg": "Invalid token"}), 401
-    
-    favorite = request.get_json()
+    #favorites_db = Favorite.query.filter_by(user_id=current_user.id)
+    #favorites_db = list(map(lambda favorite: favorite.serialize(), favorites_db))
+    #favorite_list = []
 
+    #for i in favorites_db:
+    #    favorite_list.append(i['character_id'])
+
+    newCharacter = request.json.get('character_id', None)
+    newPlanet = request.json.get('planet_id', None)
+
+    if newCharacter >= 0:
+        newFavorite = Favorite(user_id=current_user.id, character_id = newCharacter)
+        db.session.add(newFavorite)
+        db.session.commit()
+    if newPlanet:
+        newFavorite = Favorite(user_id=current_user.id, planet_id = newPlanet)
+        db.session.add(newFavorite)
+        db.session.commit()
+
+    print(False)
+    return jsonify(True),200
+
+    #newFavorite = Favorite(user_id=current_user.id, character_id = favorite['character_id'])
+
+    #favorite_list.append(newFavorite.character_id)
+
+    #db.session.add(favorite_list)
+    #db.session.commit()
+
+    #return jsonify(newFavorite.serialize()), 200
 
 
 @app.route("/character/<int:id>", methods=["GET"])
